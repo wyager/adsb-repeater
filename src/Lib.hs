@@ -29,6 +29,7 @@ import           Data.Foldable (foldlM)
 -- import qualified Data.FingerTree as FT
 import qualified Data.HashMap.Strict as HM
 import qualified Data.Vector as Vector
+import           Control.Concurrent.Async (concurrently)
 
 data Command w 
     = Count (w ::: [FilePath] <?> "Path to files")
@@ -80,7 +81,7 @@ someFunc :: IO ()
 someFunc = do
     command <- unwrapRecord "Flight data repeater tool"
     case command of 
-        Load path -> load path
+        Load path -> showLoad path
         Diff a b -> showDiff a b
         _ -> return ()
         -- Count files -> mapM_ count files
@@ -89,9 +90,9 @@ someFunc = do
         -- Apply a db -> apply a db
         -- Test paths -> test paths >>= print
 
-load :: FilePath -> IO ()
-load path = do
-    loaded :: Parsed <- either fail return . Aeson.eitherDecode' =<< BL.readFile path
+showLoad :: FilePath -> IO ()
+showLoad path = do
+    loaded <- load path
     BL.hPut stdout $ Aeson.encode loaded
     
 
@@ -114,12 +115,14 @@ diff a b = HM.unions [delete,add,update]
         add' = Just <$> HM.difference r l
         update' = HM.mapMaybe (Just <$>) $ HM.intersectionWith (\x y -> if x == y then Nothing else Just y) l r
 
+load :: FilePath -> IO Parsed
+load path = either fail return . Aeson.eitherDecode' =<< BL.readFile path -- 160ms
+
 showDiff :: FilePath -> FilePath -> IO () 
 showDiff a b = do
-    a' :: Parsed <- either fail (evaluate . force) . Aeson.eitherDecode' =<< BL.readFile a -- 160ms
-    b' :: Parsed <- either fail (evaluate . force) . Aeson.eitherDecode' =<< BL.readFile b
-    res <- evaluate . force $  diff (ac a') (ac b') -- 70ms
-    BL.hPut stdout $ Aeson.encode () -- <10ms
+    (a',b') <- concurrently (load a) (load b)
+    let res = diff (ac a') (ac b') -- 70ms
+    BL.hPut stdout $ Aeson.encode res -- <10ms
 
 
 -- count :: FilePath  -> IO ()

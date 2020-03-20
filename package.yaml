@@ -37,6 +37,7 @@ dependencies:
 - fingertree
 - unordered-containers
 - vector
+- async
 
 default-extensions:
 - OverloadedStrings
