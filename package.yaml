@@ -34,6 +34,9 @@ dependencies:
 - generic-lens
 - microlens
 - deepseq
+- fingertree
+- unordered-containers
+- vector
 
 default-extensions:
 - OverloadedStrings
@@ -71,6 +74,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N1
     - -O
+    - -Wall -Wextra -Werror
     dependencies:
     - adsb-repeater
 
