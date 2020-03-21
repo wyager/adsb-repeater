@@ -1,7 +1,7 @@
 module Lib where
 
-import           Options.Generic (ParseRecord, Wrapped, 
-                                  lispCaseModifiers, unwrapRecord,
+import           Options.Generic (ParseRecord, Wrapped, ParseFields, ParseField, 
+                                  lispCaseModifiers, unwrapRecord, readField, parseFields,
                                   parseRecord, parseRecordWithModifiers,
                                   type (:::), type (<?>))
 import           GHC.Generics    (Generic)
@@ -31,12 +31,14 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.Vector as Vector
 import           Control.Concurrent.Async (concurrently)
 import           Data.Hashable (Hashable)
+import qualified Network.HTTP.Req as Req
 
 data Command w 
     = Diff (w ::: FilePath <?> "Path to first file") (w ::: FilePath <?> "Path to second file")
     | Apply (w ::: FilePath <?> "Path to first file") (w ::: FilePath <?> "Path to diff")
     | Test (w ::: [FilePath] <?> "Path to files")
     | Load (w ::: FilePath <?> "Path to file")
+    | LoadWeb {apiKey :: w ::: APIKey <?> "API key"}
     deriving (Generic)
 
 instance ParseRecord (Command Wrapped) where
@@ -90,6 +92,7 @@ someFunc = do
         Diff a b -> showDiff a b
         Apply a db -> showApply a db
         Test paths -> test paths >>= print
+        LoadWeb apiKey -> loadWeb apiKey >>= (BL.hPut stdout . Aeson.encode)
 
 showLoad :: FilePath -> IO ()
 showLoad path = do
@@ -181,3 +184,23 @@ test (p:ps) = do
                     rawBytes' = BL.length encoded
                     compBytes' = BS.length $ compress maxCLevel $ BL.toStrict encoded
                 go (rawBytes + rawBytes', compBytes + compBytes') next ns
+
+newtype APIKey = APIKey BS.ByteString
+    deriving Generic
+    -- deriving anyclass (ParseRecord, ParseFields)
+instance ParseFields APIKey where
+    parseFields h l s = APIKey <$> parseFields h l s
+instance ParseRecord APIKey where
+    parseRecord = APIKey <$> parseRecord
+
+
+loadWeb :: APIKey -> IO Parsed
+loadWeb (APIKey key) = do
+    resp <- Req.runReq Req.defaultHttpConfig $ 
+        Req.req 
+            Req.GET 
+            (Req.https "adsbexchange.com" Req./: "api" Req./: "aircraft" Req./: "json") 
+            Req.NoReqBody 
+            Req.jsonResponse 
+            (Req.header "api-auth" key)
+    return $ Req.responseBody resp
