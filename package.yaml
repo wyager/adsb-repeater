@@ -38,6 +38,10 @@ dependencies:
 - unordered-containers
 - vector
 - async
+- req
+- servant
+- warp
+- hashable
 
 default-extensions:
 - OverloadedStrings
